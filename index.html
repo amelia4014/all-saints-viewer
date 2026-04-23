@@ -3,37 +3,120 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>3D Model Viewer</title>
+    <title>All Saints – 3D Globe</title>
 
-    <!-- model-viewer from unpkg CDN -->
-    <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
+    <!-- CesiumJS CDN includes (as shown in CesiumJS Quickstart) -->
+    https://cesium.com/downloads/cesiumjs/releases/1.140/Build/Cesium/Cesium.jsscript>
+    https://cesium.com/downloads/cesiumjs/releases/1.140/Build/Cesium/Widgets/widgets.css
 
     <style>
-      html, body { height: 100%; margin: 0; }
-      body { background: #f3f3f3; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
-      model-viewer { width: 100vw; height: 100vh; }
-      .hint {
-        position: fixed;
-        left: 12px;
-        bottom: 12px;
-        padding: 8px 10px;
-        background: rgba(0,0,0,0.6);
-        color: #fff;
-        border-radius: 8px;
-        font-size: 13px;
+      html, body, #cesiumContainer {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
       }
+
+      #status {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        z-index: 9999;
+        background: rgba(0,0,0,0.65);
+        color: #fff;
+        padding: 10px 12px;
+        border-radius: 10px;
+        font: 13px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+        max-width: 420px;
+        white-space: pre-line;
+      }
+
+      #status b { color: #b7ffb7; }
     </style>
   </head>
 
   <body>
-    <model-viewer src="model.glb"
-                  alt="3D model"
-                  camera-controls
-                  auto-rotate
-                  shadow-intensity="1">
-    </model-viewer>
+    <div id="cesiumContainer"></div>
+    <div id="status">Starting…</div>
 
-    <div class="hint">Drag to rotate • Scroll to zoom • Right-drag to pan</div>
+    <script type="module">
+      const statusEl = document.getElementById("status");
+      const say = (msg) => { statusEl.textContent = msg; };
+
+      // =========================
+      // 1) CONFIG YOU MUST SET
+      // =========================
+
+      // Paste your Cesium ion token here (Quickstart uses this for World Terrain / OSM Buildings)
+      // Get it from your Cesium ion "Access Tokens" page.
+      Cesium.Ion.defaultAccessToken = "PASTE_YOUR_CESIUM_ION_TOKEN_HERE"; // [1](https://docs.blender.org/manual/en/4.0/files/import_export/collada.html)[2](https://cesium.com/platform/cesium-ion/3d-tiling-pipeline/design-tiler/)
+
+      // Target location (your school coords from your KML)
+      const LON = 153.3636790;
+      const LAT = -28.0590931;
+
+      // Model file path (must exist at /globe/model.glb)
+      const MODEL_URL = "./model.glb";
+
+      // Adjust these if needed
+      const CAMERA_HEIGHT_M = 600;     // how high the initial camera is
+      const MODEL_HEIGHT_M  = 0;       // raise/lower model if it floats/sinks
+      const MODEL_SCALE     = 1.0;     // increase if model is too small
+      const MIN_PIXEL_SIZE  = 128;     // forces visibility even when zoomed out
+
+      // =========================
+      // 2) CREATE VIEWER + TERRAIN
+      // =========================
+      say("Loading Cesium Viewer + terrain…");
+      const viewer = new Cesium.Viewer("cesiumContainer", {
+        terrain: Cesium.Terrain.fromWorldTerrain(), // [1](https://docs.blender.org/manual/en/4.0/files/import_export/collada.html)
+      });
+
+      // =========================
+      // 3) FORCE CAMERA TO SITE
+      // =========================
+      say("Flying camera to site…");
+      viewer.camera.flyTo({
+        destination: Cesium.Cartesian3.fromDegrees(LON, LAT, CAMERA_HEIGHT_M),
+        orientation: {
+          heading: Cesium.Math.toRadians(0),
+          pitch: Cesium.Math.toRadians(-35),
+          roll: 0
+        }
+      }); // [1](https://docs.blender.org/manual/en/4.0/files/import_export/collada.html)
+
+      // =========================
+      // 4) ADD MODEL (GLB)
+      // =========================
+      say("Adding model… (if this stays, check Console for errors)");
+      const modelEntity = viewer.entities.add({
+        name: "All Saints Model",
+        position: Cesium.Cartesian3.fromDegrees(LON, LAT, MODEL_HEIGHT_M),
+        model: {
+          uri: MODEL_URL,              // load GLB from URL [3](https://b3d.interplanety.org/en/blender-add-on-blender-3mf/)
+          scale: MODEL_SCALE,
+          minimumPixelSize: MIN_PIXEL_SIZE
+        }
+      }); // [3](https://b3d.interplanety.org/en/blender-add-on-blender-3mf/)
+
+      // Zoom/fly to the model once it exists
+      viewer.flyTo(modelEntity);
+
+      // =========================
+      // 5) OPTIONAL: OSM BUILDINGS
+      // =========================
+      // Quickstart adds OSM Buildings, but this can fail depending on token/network.
+      // We wrap it so failure does NOT stop the model/camera.
+      try {
+        say("Loading OSM buildings (optional)…");
+        const buildings = await Cesium.createOsmBuildingsAsync(); // [1](https://docs.blender.org/manual/en/4.0/files/import_export/collada.html)
+        viewer.scene.primitives.add(buildings);
+        say("✅ Loaded model + buildings.\nUse mouse to zoom/tilt.");
+      } catch (e) {
+        console.warn("OSM buildings failed, continuing without them:", e);
+        say("✅ Loaded model (buildings skipped).\nIf you don’t see the model:\n- verify /globe/model.glb exists\n- increase MODEL_SCALE\n- check Console (F12)");
+      }
+    </script>
   </body>
 </html>
-
