@@ -1,111 +1,177 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>All Saints – 3D Globe</title>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>All Saints – 3D Globe</title>
 
-    <!-- CesiumJS CDN includes (pattern from CesiumJS Quickstart) -->
-    <script src="https://cesium.com/downloads/cesiumjs/releases/1.140/Build/Cesium/Cesium.js"></script>
-    <link href="https://cesium.com/downloads/cesiumjs/releases/1.140/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+  <!-- CesiumJS CDN includes (pattern from CesiumJS Quickstart) -->
+  <script src="https://cesium.com/downloads/cesiumjs/releases/1.140/Build/Cesium/Cesium.js"></script>
+  <link href="https://cesium.com/downloads/cesiumjs/releases/1.140/Build/Cesium/Widgets/widgets.css" rel="stylesheet" />
 
-    <style>
-      html, body, #cesiumContainer { width:100%; height:100%; margin:0; padding:0; overflow:hidden; }
-      #status {
-        position:absolute; top:10px; left:10px; z-index:9999;
-        background:rgba(0,0,0,.65); color:#fff; padding:10px 12px; border-radius:10px;
-        font:13px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-        max-width:460px; white-space:pre-line;
-      }
-      #status b { color:#b7ffb7; }
-    </style>
-  </head>
+  <style>
+    html, body, #cesiumContainer { width:100%; height:100%; margin:0; padding:0; overflow:hidden; }
+    #status {
+      position:absolute; top:10px; left:10px; z-index:9999;
+      width: 380px;
+      background: rgba(0,0,0,.72);
+      color:#fff; padding:12px 12px; border-radius:12px;
+      font: 13px/1.35 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      white-space: pre-line;
+    }
+    .ok { color:#b7ffb7; }
+    .warn { color:#ffd27a; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  </style>
+</head>
 
-  <body>
-    <div id="cesiumContainer"></div>
-    <div id="status">Starting…</div>
+<body>
+  <div id="cesiumContainer"></div>
+  <div id="status">Starting…</div>
 
-    <script type="module">
-      const statusEl = document.getElementById("status");
-      const say = (m) => statusEl.textContent = m;
+  <script type="module">
+    const statusEl = document.getElementById("status");
+    const say = (msg) => statusEl.textContent = msg;
 
-      // --- CONFIG ---
-      const LON = 153.3636790;
-      const LAT = -28.0590931;
-      const H = 0;
+    // ==========================================================
+    // 0) YOUR SETTINGS (EDIT THESE)
+    // ==========================================================
 
-      // MUST exist at https://amelia4014.github.io/all-saints-viewer/globe/model.glb
-      const MODEL_URL = "./model.glb";
+    // ✅ Paste your real Cesium ion token here (required for World Terrain / OSM buildings).
+    // Cesium Quickstart uses Ion.defaultAccessToken for ion-hosted terrain. mport_export/collada.html)[6](https://cesium.com/platform/cesium-ion/3d-tiling-pipeline/design-tiler/)
+    Cesium.Ion.defaultAccessToken = "PASTE_YOUR_CESIUM_ION_TOKEN_HERE";
 
-      // If model is tiny (common), increase scale:
-      const MODEL_SCALE = 10.0;       // try 1, 10, 100
-      const MIN_PIXEL_SIZE = 256;     // forces visibility even when far away
+    // Site anchor (you’ve been using these already)
+    const LON = 153.3636790;
+    const LAT = -28.0590931;
 
-      // Paste your Cesium ion token (Quickstart uses tokens for World Terrain / OSM buildings)
-      Cesium.Ion.defaultAccessToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIxOWU0MWE0YS1jMDcxLTQxNjItODczMi0yOTYyYmU4MmIyNTYiLCJpZCI6NDIyMTYxLCJpYXQiOjE3NzY5MTQ5MTZ9.kDViDMu7RiP_KDWaaaptRxgKLPVvLlEh-KiE-gh_kdQ";
+    // Model file (must exist at /globe/model.glb)
+    const MODEL_URL = "./model.glb";
 
-      // 1) Create viewer + terrain (Quickstart pattern)
-      say("Creating viewer + terrain…");
-      const viewer = new Cesium.Viewer("cesiumContainer", {
-        terrain: Cesium.Terrain.fromWorldTerrain(),
-      }); // [1](https://docs.blender.org/manual/en/4.0/files/import_export/collada.html)
+    // Target real-world length in meters (your requirement)
+    const TARGET_LENGTH_M = 24.0;
 
-      // 2) Fly camera to site (Quickstart uses camera.flyTo)
-      say("Flying camera to site…");
-      viewer.camera.flyTo({
-        destination: Cesium.Cartesian3.fromDegrees(LON, LAT, 700),
-        orientation: { heading: 0, pitch: Cesium.Math.toRadians(-35), roll: 0 }
-      }); // [1](https://docs.blender.org/manual/en/4.0/files/import_export/collada.html)
+    // Orientation (degrees) — start simple; adjust to match your red-box footprint
+    // Heading rotates around up axis (compass direction). [4](https://thecraftsandkitchen.com/how-to-open-3mf-files-in-blender-free-import-tutorial/)
+    let HEADING_DEG = 0;
+    let PITCH_DEG   = 0;
+    let ROLL_DEG    = 0;
 
-      // 3) Add a visible marker so you KNOW you're at the right place
-      viewer.entities.add({
-        name: "Site Marker",
-        position: Cesium.Cartesian3.fromDegrees(LON, LAT, 0),
-        point: { pixelSize: 16, color: Cesium.Color.YELLOW, outlineColor: Cesium.Color.BLACK, outlineWidth: 2 }
-      });
+    // Optional local meter offsets (East, North, Up) to slide model onto the pad
+    // (use this if the model origin isn’t at the footprint centre)
+    let OFFSET_EAST_M  = 0;
+    let OFFSET_NORTH_M = 0;
+    let OFFSET_UP_M    = 0;
 
-      // 4) Try loading the model using Entity API (simple approach)
-      say("Loading model via Entity API…");
-      const modelEntity = viewer.entities.add({
-        name: "All Saints Model",
-        position: Cesium.Cartesian3.fromDegrees(LON, LAT, 0),
-        model: {
-          uri: MODEL_URL,
-          scale: MODEL_SCALE,
-          minimumPixelSize: MIN_PIXEL_SIZE
-        }
-      }); // [2](https://b3d.interplanety.org/en/blender-add-on-blender-3mf/)
+    // If the auto-size is close but not perfect, you can multiply the computed scale
+    // e.g., 1.00 = no change, 1.05 = +5%, 0.95 = -5%
+    let SCALE_TWEAK = 1.00;
 
-      // Fly to it (even if the model is still streaming)
-      viewer.flyTo(modelEntity);
+    // ==========================================================
+    // 1) CREATE VIEWER + TERRAIN (Quickstart pattern)
+    // ==========================================================
+    say("Loading viewer…");
 
-      // 5) OPTIONAL: If the entity model fails silently, load it as a Primitive with try/catch
-      // Cesium docs recommend constructing models via Model.fromGltfAsync [4](https://www.blenderkit.com/addons/9a5b095b-304a-461f-b3ec-6e4a8044f9c0/)[6](https://docs.ifcopenshell.org/autoapi/ifcopenshell/api/georeference/index.html)
-      try {
-        say("Also loading model as Primitive (debug)…");
-        const pos = Cesium.Cartesian3.fromDegrees(LON, LAT, 0);
-        const hpr = new Cesium.HeadingPitchRoll(0, 0, 0);
-        const model = await Cesium.Model.fromGltfAsync({
-          url: MODEL_URL,
-          modelMatrix: Cesium.Transforms.headingPitchRollToFixedFrame(pos, hpr),
-          scale: MODEL_SCALE,
-          minimumPixelSize: MIN_PIXEL_SIZE
-        });
-        viewer.scene.primitives.add(model);
-        say("✅ Model loaded (Entity + Primitive). If you still don’t see it, increase MODEL_SCALE.");
-      } catch (e) {
-        console.error("Primitive model load failed:", e);
-        say("⚠️ Model load failed.\nOpen F12 → Console and look for errors.\nCommon causes:\n- model.glb 404\n- Git LFS pointer file\n- GLB parse error");
-      }
+    const viewer = new Cesium.Viewer("cesiumContainer", {
+      terrain: Cesium.Terrain.fromWorldTerrain(),   // [3](https://docs.blender.org/manual/en/4.0/files/import_export/collada.html)
+    });
 
-      // 6) Try OSM buildings but do not let failure stop everything
-      try {
-        const buildings = await Cesium.createOsmBuildingsAsync();
-        viewer.scene.primitives.add(buildings);
-      } catch (e) {
-        console.warn("OSM Buildings failed (continuing):", e);
-      } // [1](https://docs.blender.org/manual/en/4.0/files/import_export/collada.html)
-    </script>
-  </body>
+    // Fly camera to site (deterministic, Quickstart-style) [3](https://docs.blender.org/manual/en/4.0/files/import_export/collada.html)
+    viewer.camera.flyTo({
+      destination: Cesium.Cartesian3.fromDegrees(LON, LAT, 700),
+      orientation: { heading: 0, pitch: Cesium.Math.toRadians(-35), roll: 0 }
+    });
+
+    // Add a visible marker at the anchor point
+    viewer.entities.add({
+      position: Cesium.Cartesian3.fromDegrees(LON, LAT, 0),
+      point: { pixelSize: 14, color: Cesium.Color.YELLOW, outlineColor: Cesium.Color.BLACK, outlineWidth: 2 }
+    });
+
+    // ==========================================================
+    // 2) LOAD MODEL AS A PRIMITIVE (gives boundingSphere + modelMatrix control)
+    // Cesium docs recommend constructing via Model.fromGltfAsync. [1](https://www.blenderkit.com/addons/9a5b095b-304a-461f-b3ec-6e4a8044f9c0/)[2](https://docs.ifcopenshell.org/autoapi/ifcopenshell/api/georeference/index.html)
+    // ==========================================================
+    say("Loading model…");
+
+    const origin = Cesium.Cartesian3.fromDegrees(LON, LAT, 0);
+
+    const model = await Cesium.Model.fromGltfAsync({
+      url: MODEL_URL
+    }); // [1](https://www.blenderkit.com/addons/9a5b095b-304a-461f-b3ec-6e4a8044f9c0/)[2](https://docs.ifcopenshell.org/autoapi/ifcopenshell/api/georeference/index.html)
+
+    viewer.scene.primitives.add(model);
+
+    // ==========================================================
+    // 3) POSITION + ORIENT THE MODEL USING A FIXED FRAME MATRIX
+    // HeadingPitchRollToFixedFrame is the standard way to orient in ENU. [2](https://docs.ifcopenshell.org/autoapi/ifcopenshell/api/georeference/index.html)[4](https://thecraftsandkitchen.com/how-to-open-3mf-files-in-blender-free-import-tutorial/)
+    // ==========================================================
+    function applyTransformAndScale() {
+      // Build orientation
+      const hpr = new Cesium.HeadingPitchRoll(
+        Cesium.Math.toRadians(HEADING_DEG),
+        Cesium.Math.toRadians(PITCH_DEG),
+        Cesium.Math.toRadians(ROLL_DEG)
+      );
+
+      // Base model matrix (ENU frame at site + heading/pitch/roll)
+      let m = Cesium.Transforms.headingPitchRollToFixedFrame(origin, hpr);
+
+      // Apply local translation in meters (east, north, up)
+      const t = Cesium.Matrix4.fromTranslation(
+        new Cesium.Cartesian3(OFFSET_EAST_M, OFFSET_NORTH_M, OFFSET_UP_M)
+      );
+      m = Cesium.Matrix4.multiply(m, t, new Cesium.Matrix4());
+
+      model.modelMatrix = m;
+
+      // --- Auto-scale to target length ---
+      // boundingSphere is world-space. Use diameter as a practical "overall size". [1](https://www.blenderkit.com/addons/9a5b095b-304a-461f-b3ec-6e4a8044f9c0/)
+      const diameterM = model.boundingSphere.radius * 2.0;
+
+      // Protect against divide-by-zero
+      const autoScale = diameterM > 0 ? (TARGET_LENGTH_M / diameterM) : 1.0;
+
+      model.scale = autoScale * SCALE_TWEAK;
+
+      // Update status panel
+      say(
+        `✅ Model loaded\n` +
+        `Anchor (lat,lon): ${LAT.toFixed(6)}, ${LON.toFixed(6)}\n\n` +
+        `Target length: ${TARGET_LENGTH_M.toFixed(2)} m\n` +
+        `Measured diameter (approx): ${diameterM.toFixed(2)} m\n` +
+        `Auto scale applied: ${autoScale.toFixed(4)}\n` +
+        `Scale tweak: ${SCALE_TWEAK.toFixed(3)}\n` +
+        `Final model.scale: ${(autoScale*SCALE_TWEAK).toFixed(4)}\n\n` +
+        `Orientation (deg): H=${HEADING_DEG}, P=${PITCH_DEG}, R=${ROLL_DEG}\n` +
+        `Offsets (m): E=${OFFSET_EAST_M}, N=${OFFSET_NORTH_M}, U=${OFFSET_UP_M}\n\n` +
+        `Tip: If it’s “standing up”, try PITCH=±90 or ROLL=±90.`
+      );
+    }
+
+    // Apply once after load
+    applyTransformAndScale();
+
+    // ==========================================================
+    // 4) OPTIONAL: OSM Buildings (don’t let it break)
+    // ==========================================================
+    try {
+      const buildings = await Cesium.createOsmBuildingsAsync(); // Quickstart adds OSM buildings [3](https://docs.blender.org/manual/en/4.0/files/import_export/collada.html)
+      viewer.scene.primitives.add(buildings);
+    } catch (e) {
+      console.warn("OSM buildings failed, continuing:", e);
+    }
+
+    // ==========================================================
+    // 5) QUICK TUNING (edit these numbers, refresh page)
+    // ==========================================================
+    // If you need to rotate/lay it flat, edit HEADING_DEG/PITCH_DEG/ROLL_DEG above,
+    // then call applyTransformAndScale() here if you want “live” updates without refresh.
+    // For now, simplest workflow:
+    //  - edit values at the top
+    //  - commit
+    //  - refresh the page
+  </script>
+</body>
 </html>
 ``
