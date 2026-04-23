@@ -3,64 +3,71 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>All Saints – 3D Globe</title>
+    <title>All Saints – Cesium Globe</title>
 
-    <!-- CesiumJS from CDN (pattern shown in Cesium Quickstart) -->
+    <!-- CesiumJS CDN includes (as shown in Cesium Quickstart) -->
     <script src="https://cesium.com/downloads/cesiumjs/releases/1.140/Build/Cesium/Cesium.js"></script>
     <link href="https://cesium.com/downloads/cesiumjs/releases/1.140/Build/Cesium/Widgets/widgets.css" rel="stylesheet" />
 
     <style>
       html, body, #cesiumContainer { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden; }
+      #status {
+        position: absolute; top: 10px; left: 10px; z-index: 9999;
+        background: rgba(0,0,0,.65); color: #fff; padding: 8px 10px; border-radius: 8px;
+        font: 13px/1.3 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+        max-width: 420px;
+      }
     </style>
   </head>
 
   <body>
     <div id="cesiumContainer"></div>
+    <div id="status">Starting…</div>
 
     <script type="module">
-      // 1) Set your Cesium ion token (required for ion content like World Terrain)
-      // Get token from https://ion.cesium.com/tokens (as shown in the Quickstart)
-      Cesium.Ion.defaultAccessToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIxOWU0MWE0YS1jMDcxLTQxNjItODczMi0yOTYyYmU4MmIyNTYiLCJpZCI6NDIyMTYxLCJpYXQiOjE3NzY5MTQ5MTZ9.kDViDMu7RiP_KDWaaaptRxgKLPVvLlEh-KiE-gh_kdQ";
+      const statusEl = document.getElementById("status");
+      const say = (msg) => (statusEl.textContent = msg);
 
-      // 2) Create the globe viewer with global terrain (Quickstart uses Terrain.fromWorldTerrain)
+      // ✅ Put your Cesium ion token here (Quickstart requires it for World Terrain / OSM Buildings)
+      Cesium.Ion.defaultAccessToken = "PASTE_YOUR_CESIUM_ION_TOKEN_HERE";
+
+      // 1) Create viewer + terrain (Quickstart pattern)
+      say("Creating viewer + terrain…");
       const viewer = new Cesium.Viewer("cesiumContainer", {
         terrain: Cesium.Terrain.fromWorldTerrain(),
-      });
+      }); // [1](https://docs.blender.org/manual/en/4.0/files/import_export/collada.html)
 
-      // 3) Add OSM 3D buildings (Quickstart adds OSM buildings via createOsmBuildingsAsync)
-      const buildings = await Cesium.createOsmBuildingsAsync();
-      viewer.scene.primitives.add(buildings);
-
-      // 4) Place your GLB model at the desired coordinates
-      // Your earlier KML used approx: lon 153.3636790, lat -28.0590931
+      // 2) Add your model FIRST so it shows even if buildings fail
+      say("Adding model…");
       const lon = 153.3636790;
       const lat = -28.0590931;
-      const heightMeters = 0; // start at 0; adjust later if it floats/sinks
+      const heightMeters = 0;
 
       const position = Cesium.Cartesian3.fromDegrees(lon, lat, heightMeters);
-
-      // Optional orientation (heading/pitch/roll). Useful if model faces the wrong direction.
-      const heading = Cesium.Math.toRadians(0); // tweak this (e.g. 90, 180) if needed
-      const pitch = Cesium.Math.toRadians(0);
-      const roll  = Cesium.Math.toRadians(0);
-      const orientation = Cesium.Transforms.headingPitchRollQuaternion(
-        position,
-        new Cesium.HeadingPitchRoll(heading, pitch, roll)
-      );
 
       const modelEntity = viewer.entities.add({
         name: "All Saints Model",
         position,
-        orientation,
         model: {
           uri: "./model.glb",
-          scale: 1.0,
-          minimumPixelSize: 64
+          minimumPixelSize: 128, // make it visible even if tiny
+          scale: 1.0
         }
-      });
+      }); // [3](https://b3d.interplanety.org/en/blender-add-on-blender-3mf/)
 
-      // 5) Fly to the model
+      say("Flying to model…");
       viewer.flyTo(modelEntity);
+
+      // 3) Try OSM buildings, but don't let failure stop the app
+      try {
+        say("Loading OSM buildings…");
+        const buildings = await Cesium.createOsmBuildingsAsync();
+        viewer.scene.primitives.add(buildings);
+        say("Loaded. (Model + buildings)");
+      } catch (e) {
+        console.warn("OSM buildings failed, continuing without them:", e);
+        say("Model loaded. (OSM buildings failed — check Console)");
+      } // [1](https://docs.blender.org/manual/en/4.0/files/import_export/collada.html)
     </script>
   </body>
 </html>
